@@ -23,7 +23,7 @@ task subset_ancestry_samples{
             psam=ref.psam
         fi
 
-        grep "${sep="\\|" ancestries_to_include}" $psam' | tr -s ' ' '\t' > ${output_filename}
+        grep "${sep="\\|" ancestries_to_include}" $psam | tr -s ' ' '\t' > ${output_filename}
     >>>
 
     runtime {
