@@ -80,9 +80,16 @@ workflow make_rfmix_refs_wf{
     Array[File] ref_vcfs_in
     Array[File] ref_vcfs_in_tbi
     Array[String] chrs
-    Array[String?] regions
     String output_basename
     String output_type = "z"
+
+    # Optional regions to subselect within each chromosome
+    Array[String]? regions
+    # This is really stupid WDL trickery to get around the fact that WDL will not let you index an optoinal array
+    # So for instance if I were to do regions[1] it would fail.
+    # But if I convert regions into a array using select_first, it can be indexed.
+    Array[String] actual_regions = if(defined(regions)) then select_first([regions]) else ["NONE"]
+
 
     # Genetic map files by chr
     Array[File] ref_genetic_maps_in
@@ -124,9 +131,14 @@ workflow make_rfmix_refs_wf{
              output_filename = "${output_basename}.samples.idsonly.txt"
     }
 
+    String? null_region
     scatter(chr_index in range(length(chrs))){
 
         String chr = chrs[chr_index]
+
+        # This is WDL trickery because you cannot actually index an optioinal array and there is no null literal character
+        # Frustrating and weird but whatevs
+        String? region = if(defined(regions)) then actual_regions[chr_index] else null_region
 
         # Format genetic map file
         call format_rfmix_genetic_map{
@@ -142,7 +154,7 @@ workflow make_rfmix_refs_wf{
                 vcf_in = ref_vcfs_in[chr_index],
                 vcf_tbi_in = ref_vcfs_in_tbi[chr_index],
                 samples_file = get_sample_ids.output_file,
-                regions = regions[chr_index],
+                regions = region,
                 output_filename = "${output_basename}.chr${chr}.vcf.gz",
                 output_type = output_type,
                 cpu = bcftools_chr_cpu,
