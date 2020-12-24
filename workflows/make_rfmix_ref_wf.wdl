@@ -128,7 +128,7 @@ workflow make_rfmix_refs_wf{
         input:
              input_file = subset_ancestry_samples.sample_file_out,
              args = "-f ${sample_file_sample_id_col},${sample_file_pop_id_col}",
-             output_filename = "${output_basename}.samples.idsonly.txt"
+             output_filename = "${output_basename}.samples.rfmix.txt"
     }
 
     String? null_region
