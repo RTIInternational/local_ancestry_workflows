@@ -39,6 +39,20 @@ workflow rfmix_chr_wf{
     Int bcftools_cpu = 4
     Int bcftools_mem_gb = 8
 
+    # Optionally split by region
+    if(defined(region)){
+        call BCFTOOLS.view as subset_region{
+            input:
+                vcf_in = query_vcf,
+                vcf_tbi_in = query_vcf_tbi,
+                regions = region,
+                output_filename = "${output_basename}.region_subset.vcf.gz",
+                output_type = "z",
+                cpu = bcftools_cpu,
+                mem_gb = bcftools_mem_gb
+        }
+    }
+
     # Split file by sample and region
     #if(defined(sample_splits)){
     #    Array[File] actual_sample_splits = select_first([sample_splits])
@@ -57,26 +71,13 @@ workflow rfmix_chr_wf{
     #    }
     #}
 
-    # Optionally split by region
-    #if(defined(region) && !defined(sample_splits)){
-    #    call BCFTOOLS.view as subset_region{
-    #        input:
-    #            vcf_in = query_vcf,
-    #            vcf_tbi_in = query_vcf_tbi,
-    #            regions = region,
-    #            output_filename = "${output_basename}.region_subset.vcf.gz",
-    #            output_type = "z",
-    #            cpu = bcftools_cpu,
-    #            mem_gb = bcftools_mem_gb
-    #    }
-    #}
-
     # Loop through splits and do RFMix on each
     #Array[File] split_query_vcfs = select_first([make_sample_chunks.vcf_out, [select_first([subset_region.vcf_out, query_vcf])]])
     #scatter(rfmix_split_index in range(length(split_query_vcfs))){
+    File rfmix_vcf_in = select_first([subset_region.vcf_out, query_vcf])
     call RFMIX.rfmix{
         input:
-            query_vcf = query_vcf,
+            query_vcf = rfmix_vcf_in,
             ref_vcf = ref_vcf,
             sample_map = sample_map,
             genetic_map = genetic_map,

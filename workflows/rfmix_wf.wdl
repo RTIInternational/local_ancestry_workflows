@@ -10,6 +10,15 @@ workflow rfmix_wf{
     File sample_map
     String output_basename
 
+    # This is really stupid WDL trickery to get around the fact that WDL will not let you index an optoinal array
+    # So for instance if I were to do regions[1] it would fail.
+    # But if I convert regions and query_vcf_tbis into arrays using select_first, we can index them.
+    Array[File]? query_vcf_tbis
+    Array[String] actual_query_vcf_tbis = select_first([query_vcf_tbis, ["DUMMY"]])
+
+    Array[String]? regions
+    Array[String] actual_regions = select_first([regions, ["DUMMY"]])
+
     # Splitting parameters
     Boolean split_query_samples = true
     Int max_samples_per_split = 500
@@ -38,16 +47,26 @@ workflow rfmix_wf{
     Int bcftools_chr_mem_gb = 8
 
     # Loop through chrs and do RFMix on each
+    String? null_region
+    File? null_vcf_tbi
     scatter(chr_index in range(length(chrs))){
         String chr = chrs[chr_index]
+
+         # This is WDL trickery because you cannot actually index an optioinal array and there is no null literal character
+        # Frustrating and weird but whatevs
+        String? region = if(defined(regions)) then actual_regions[chr_index] else null_region
+        File? query_vcf_tbi = if(defined(query_vcf_tbis)) then actual_query_vcf_tbis[chr_index] else null_vcf_tbi
+
         call RFMIX_CHR_WF.rfmix_chr_wf{
             input:
                 query_vcf = query_vcfs[chr_index],
+                query_vcf_tbi = query_vcf_tbi,
                 ref_vcf = ref_vcfs[chr_index],
                 sample_map = sample_map,
                 genetic_map = genetic_maps[chr_index],
                 output_basename = "${output_basename}.chr${chr}",
                 chr = chr,
+                region = region,
                 random_seed = random_seed,
                 crf_spacing = crf_spacing,
                 rf_window_size = rf_window_size,
