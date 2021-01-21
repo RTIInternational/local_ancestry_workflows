@@ -16,6 +16,9 @@ workflow rfmix_chr_wf{
     # Region to analyze <start_pos>-<end_pos>, in Mbp (decimal allowed)
     String? region
 
+    # Subset of samples to include
+    File? query_samples
+
     # Random seed
     String? random_seed
 
@@ -40,12 +43,13 @@ workflow rfmix_chr_wf{
     Int bcftools_mem_gb = 8
 
     # Optionally split by region
-    if(defined(region)){
+    if(defined(region) || defined(query_samples)){
         call BCFTOOLS.view as subset_region{
             input:
                 vcf_in = query_vcf,
                 vcf_tbi_in = query_vcf_tbi,
                 regions = region,
+                samples_file = query_samples,
                 output_filename = "${output_basename}.region_subset.vcf.gz",
                 output_type = "z",
                 cpu = bcftools_cpu,

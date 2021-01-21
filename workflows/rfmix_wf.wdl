@@ -19,6 +19,9 @@ workflow rfmix_wf{
     Array[String]? regions
     Array[String] actual_regions = select_first([regions, ["DUMMY"]])
 
+    # Optional file of samples to extract from query_vcf
+    File? query_samples
+
     # Splitting parameters
     Boolean split_query_samples = true
     Int max_samples_per_split = 500
@@ -64,6 +67,7 @@ workflow rfmix_wf{
                 ref_vcf = ref_vcfs[chr_index],
                 sample_map = sample_map,
                 genetic_map = genetic_maps[chr_index],
+                query_samples = query_samples,
                 output_basename = "${output_basename}.chr${chr}",
                 chr = chr,
                 region = region,
