@@ -101,24 +101,54 @@ workflow make_rfmix_refs_wf{
     # 1-based column index of column that will contain ancestry group (usually 2 for pop, 3 for superpop but make sure)
     Int sample_file_pop_id_col
     Array[String] ancestries_to_include = ["AFR", "EUR", "EAS"]
+    # Maximum number of samples to take from each ancestry
+    Int? max_samples_per_ancestry
+
+    # Optional Filter thresholds for sites included in ref panel
+    Float? min_af
+    Int? min_ac
 
     # Resources used to split each chromosome
     Int bcftools_chr_cpu = 2
     Int bcftools_chr_mem_gb = 8
 
+    # Subset to include only a specific number of samples from specific ancestries
+    scatter(ancestry in ancestries_to_include){
 
-    # Subset samples to only desired ref populations you want to partition ancestry among
-    call subset_ancestry_samples{
+        # Get all the samples from one of the desired ancestriess
+        call subset_ancestry_samples{
+            input:
+                sample_file_in = sample_file_in,
+                ancestries_to_include = [ancestry],
+                output_filename = "${output_basename}.${ancestry}.samples.txt"
+        }
+
+        # Random subset if necessary
+        if(defined(max_samples_per_ancestry)){
+            call UTILS.shuf as random_ancestry_subset{
+                input:
+                    input_file = subset_ancestry_samples.sample_file_out,
+                    n = max_samples_per_ancestry,
+                    output_filename = "${output_basename}.${ancestry}.random${max_samples_per_ancestry}.samples.txt"
+            }
+        }
+
+        # Select one or other file so we can return this a a single file array
+        File ancestry_sample_files = select_first([random_ancestry_subset.output_file,
+                                                   subset_ancestry_samples.sample_file_out])
+    }
+
+    # Cat ancestry subsets into one final set of samples to select
+    call UTILS.cat as cat_ancestry_samples{
         input:
-            sample_file_in = sample_file_in,
-            ancestries_to_include = ancestries_to_include,
-            output_filename = "${output_basename}.samples.txt"
+            input_files = ancestry_sample_files,
+            output_filename = "${output_basename}.samples.samples.txt"
     }
 
     # Create sample id list for subsetting vcf files
     call UTILS.cut as get_sample_ids{
         input:
-             input_file = subset_ancestry_samples.sample_file_out,
+             input_file = cat_ancestry_samples.output_file,
              args = "-f ${sample_file_sample_id_col}",
              output_filename = "${output_basename}.samples.idsonly.txt"
     }
@@ -126,7 +156,7 @@ workflow make_rfmix_refs_wf{
     # Create sample id list for subsetting vcf files
     call UTILS.cut as make_rfmix_sample_file{
         input:
-             input_file = subset_ancestry_samples.sample_file_out,
+             input_file = cat_ancestry_samples.output_file,
              args = "-f ${sample_file_sample_id_col},${sample_file_pop_id_col}",
              output_filename = "${output_basename}.samples.rfmix.txt"
     }
@@ -155,6 +185,8 @@ workflow make_rfmix_refs_wf{
                 vcf_tbi_in = ref_vcfs_in_tbi[chr_index],
                 samples_file = get_sample_ids.output_file,
                 regions = region,
+                maf_filter = min_af,
+                min_ac = min_ac,
                 output_filename = "${output_basename}.chr${chr}.vcf.gz",
                 output_type = output_type,
                 cpu = bcftools_chr_cpu,
@@ -166,7 +198,7 @@ workflow make_rfmix_refs_wf{
     output{
         Array[File] ref_vcfs_out = subset_ref_vcf.vcf_out
         Array[File] genetic_map_files_out = format_rfmix_genetic_map.genetic_map_out
-        File sample_file_out = subset_ancestry_samples.sample_file_out
+        File sample_file_out = cat_ancestry_samples.output_file
         File rfmix_sample_file_out = make_rfmix_sample_file.output_file
     }
 }
